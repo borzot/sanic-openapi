@@ -124,14 +124,28 @@ definitions = {}
 
 class Object(Field):
     def __init__(self, cls, *args, object_name=None, **kwargs):
-        super().__init__(*args, **kwargs)
-
         self.cls = cls
         self.object_name = object_name or cls.__name__
+
+        #getting properties of class
+        self.properties = self.getProperties()
+
+        #getting the name of discriminator if exists
+        self.discriminator = self.getDiscriminatorName()
+
+        #adding discriminator field in 'required'
+        if self.discriminator:
+            if 'required' in kwargs:
+                kwargs['required'].append(self.discriminator)
+            else:
+                kwargs['required'] = [self.discriminator]
+
+        super().__init__(*args, **kwargs)
 
         register_as = object_name or "{}.{}".format(cls.__module__, cls.__qualname__)
         if register_as not in definitions:
             definitions[register_as] = (self, self.definition)
+
         #creating definitions for all parental classes
         for base in cls.__bases__:
             if base.__name__ != "object":
@@ -145,26 +159,44 @@ class Object(Field):
         for base in self.cls.__bases__:
             if base.__name__ != "object":
                 refs.append({'$ref': "#/definitions/{}".format(base.__name__)})
-        if refs != []:
-            return {'allOf': refs}
-        else:
-            return {}
+        return refs
+
+    def getDiscriminatorName(self):
+        """if class has field that fits into discriminator's
+        name template, returns that field name"""
+        if f"{self.cls.__name__}Type" in self.properties:
+            return f"{self.cls.__name__}Type"
+
+    def getDiscriminatorDef(self):
+        """if class has discriminator, returns dict with it definition"""
+        return {'discriminator': self.discriminator} if self.discriminator else {}
+
+    def getProperties(self):
+        """moved from definition method because of necessity in additional use"""
+        return {
+            key: serialize_schema(schema)
+            for key, schema in chain(
+                self.cls.__dict__.items(), typing.get_type_hints(self.cls).items()
+            )
+            if not key.startswith("_")
+        }
 
     @property
     def definition(self):
-        return {
-            #inserting allOf with refs if parental classes exists
-            **self.inheritanceRef(),
+        definition = {
             "type": "object",
-            "properties": {
-                key: serialize_schema(schema)
-                for key, schema in chain(
-                    self.cls.__dict__.items(), typing.get_type_hints(self.cls).items()
-                )
-                if not key.startswith("_")
-            },
+
+            #inserting the definiton of discriminator
+            **self.getDiscriminatorDef(),
+
+            "properties": self.properties,
             **super().serialize(),
         }
+
+        #getting all refs on parental classes
+        refs = self.inheritanceRef()
+
+        return {"allOf": refs+[definition]} if refs != [] else definition
 
     def serialize(self):
         return {
