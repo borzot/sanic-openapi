@@ -1,5 +1,4 @@
 import collections.abc
-import typing
 import uuid
 from collections import defaultdict
 from datetime import date, datetime
@@ -162,10 +161,12 @@ class Object(Field):
         return refs
 
     def getDiscriminatorName(self):
-        """if class has field that fits into discriminator's
-        name template, returns that field name"""
-        if f"{self.cls.__name__}Type" in self.properties:
-            return f"{self.cls.__name__}Type"
+        """returns discriminator field name if it is
+         in class and described in _meta"""
+        if "_meta" in self.cls.__dict__:
+            if "discriminator" in self.cls._meta.__dict__:
+                if self.cls._meta.__dict__["discriminator"] in self.properties:
+                    return self.cls._meta.__dict__["discriminator"]
 
     def getDiscriminatorDef(self):
         """if class has discriminator, returns dict with it definition"""
@@ -176,8 +177,8 @@ class Object(Field):
         return {
             key: serialize_schema(schema)
             for key, schema in chain(
-                self.cls.__dict__.items(), typing.get_type_hints(self.cls).items()
-            )
+                self.cls.__dict__.items(),self.cls.__annotations__.items() 
+                if '__annotations__' in dir(self.cls) else {}.items()) 
             if not key.startswith("_")
         }
 
