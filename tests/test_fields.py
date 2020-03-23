@@ -431,3 +431,108 @@ def test_object_field(app):
         "type": "object",
         "properties": {},
     }
+
+class A:
+    a = str
+
+class B(A):
+    b = str
+
+class C:
+    c = str
+
+class D(B, C):
+    d = str
+
+class E:
+    e = str
+    discr = str
+    class _meta:
+        discriminator = 'discr'
+
+
+def testInheritance(app):
+    @app.get("/")
+    @doc.consumes(B)
+    def test(request):
+        return text("test")
+
+    _, response = app.test_client.get("/swagger/swagger.json")
+    assert response.status == 200
+    assert response.content_type == "application/json"
+
+    swagger_json = response.json
+
+    assert swagger_json["definitions"]["B"] == {
+        'allOf': [
+            {
+                "$ref": "#/definitions/A",
+            },
+            {
+                "type": "object",
+                "properties": {
+                    "b": {
+                        "type": "string"
+                    },
+                },
+            }
+        ]
+    }
+
+def testMultipleInheritance(app):
+    @app.get("/")
+    @doc.consumes(D)
+    def test(request):
+        return text("test")
+
+    _, response = app.test_client.get("/swagger/swagger.json")
+    assert response.status == 200
+    assert response.content_type == "application/json"
+
+    swagger_json = response.json
+
+    assert swagger_json["definitions"]["D"] == {
+        'allOf': [
+            {
+                "$ref": "#/definitions/B",
+            },
+            {
+                "$ref": "#/definitions/C",
+            },
+            {
+                "type": "object",
+                "properties": {
+                    "d": {
+                        "type": "string"
+                    },
+                },
+            }
+        ]
+    }
+
+def test_Discriminator(app):
+    @app.get("/test/")
+    @doc.produces(E)
+    def test(request):
+        return text("test")
+
+    _, response = app.test_client.get("/swagger/swagger.json")
+    assert response.status == 200
+    assert response.content_type == "application/json"
+
+    swagger_json = response.json
+    assert swagger_json["definitions"]["E"] == {
+        "type": "object",
+        "discriminator": "discr",
+        "properties": {
+            "e": {
+                "type": "string"
+            },
+            "discr": {
+                "type": "string"
+            },
+        },
+        "required": [
+            "discr"
+        ]
+    }

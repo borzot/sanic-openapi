@@ -10,5 +10,5 @@ def app():
     app.blueprint(sanic_openapi.swagger_blueprint)
     yield app
 
-    # Clean up
-    sanic_openapi.swagger.definitions = {}
+    # Clean up | can't check definitions field cause of clean up
+    #sanic_openapi.swagger.definitions = {}
