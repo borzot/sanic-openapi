@@ -457,6 +457,11 @@ class E:
         discriminator = 'discr'
 
 
+class F:
+    f = str
+    discr = doc.Discriminator()
+
+
 def testInheritance(app):
     @app.get("/")
     @doc.consumes(B)
@@ -520,6 +525,7 @@ def testMultipleInheritance(app):
 
 def test_Discriminator(app):
     @app.get("/test/")
+    @doc.consumes(F)
     @doc.produces(E)
     def test(request):
         return text("test")
@@ -534,6 +540,21 @@ def test_Discriminator(app):
         "discriminator": "discr",
         "properties": {
             "e": {
+                "type": "string"
+            },
+            "discr": {
+                "type": "string"
+            },
+        },
+        "required": [
+            "discr"
+        ]
+    }
+    assert swagger_json["definitions"]["F"] == {
+        "type": "object",
+        "discriminator": "discr",
+        "properties": {
+            "f": {
                 "type": "string"
             },
             "discr": {
