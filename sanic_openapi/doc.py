@@ -40,6 +40,10 @@ class String(Field):
         return {"type": "string", **super().serialize()}
 
 
+class Discriminator(String):
+    pass
+
+
 class Boolean(Field):
     def serialize(self):
         return {"type": "boolean", **super().serialize()}
@@ -163,10 +167,15 @@ class Object(Field):
     def getDiscriminatorName(self):
         """returns discriminator field name if it is
          in class and described in _meta"""
-        if "_meta" in self.cls.__dict__:
-            if "discriminator" in self.cls._meta.__dict__:
-                if self.cls._meta.__dict__["discriminator"] in self.properties:
-                    return self.cls._meta.__dict__["discriminator"]
+        for var in self.cls.__dict__.items():
+            if var[1].__class__.__name__ == 'Discriminator':
+                return var[0]
+        if "_meta" not in self.cls.__dict__:
+            return None
+        if "discriminator" not in self.cls._meta.__dict__:
+            return None
+        if self.cls._meta.__dict__["discriminator"] in self.properties:
+            return self.cls._meta.__dict__["discriminator"]
 
     def getDiscriminatorDef(self):
         """if class has discriminator, returns dict with it definition"""
