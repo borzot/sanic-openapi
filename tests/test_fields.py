@@ -432,21 +432,27 @@ def test_object_field(app):
         "properties": {},
     }
 
+
 class A:
     a = str
+
 
 class B(A):
     b = str
 
+
 class C:
     c = str
+
 
 class D(B, C):
     d = str
 
+
 class E:
     e = str
     discr = str
+
     class _meta:
         discriminator = 'discr'
 
@@ -479,6 +485,7 @@ def testInheritance(app):
         ]
     }
 
+
 def testMultipleInheritance(app):
     @app.get("/")
     @doc.consumes(D)
@@ -509,6 +516,7 @@ def testMultipleInheritance(app):
             }
         ]
     }
+
 
 def test_Discriminator(app):
     @app.get("/test/")
