@@ -126,13 +126,13 @@ class Object(Field):
         self.cls = cls
         self.object_name = object_name or cls.__name__
 
-        #getting properties of class
+        # getting properties of class
         self.properties = self.getProperties()
 
-        #getting the name of discriminator if exists
+        # getting the name of discriminator if exists
         self.discriminator = self.getDiscriminatorName()
 
-        #adding discriminator field in 'required'
+        # adding discriminator field in 'required'
         if self.discriminator:
             if 'required' in kwargs:
                 kwargs['required'].append(self.discriminator)
@@ -145,13 +145,13 @@ class Object(Field):
         if register_as not in definitions:
             definitions[register_as] = (self, self.definition)
 
-        #creating definitions for all parental classes
+        # creating definitions for all parental classes
         for base in cls.__bases__:
             if base.__name__ != "object":
                 Object(base)
 
     def inheritanceRef(self):
-        """if class has any parents except 'object' class, 
+        """if class has any parents except 'object' class,
         return dict with a key 'allOf' and a list with links
          on parental classes definitions"""
         refs = []
@@ -170,15 +170,17 @@ class Object(Field):
 
     def getDiscriminatorDef(self):
         """if class has discriminator, returns dict with it definition"""
-        return {'discriminator': self.discriminator} if self.discriminator else {}
+        return {'discriminator':
+                self.discriminator} if self.discriminator else {}
 
     def getProperties(self):
-        """moved from definition method because of necessity in additional use"""
+        """moved from definition method because
+        of necessity in additional use"""
         return {
             key: serialize_schema(schema)
             for key, schema in chain(
-                self.cls.__dict__.items(),self.cls.__annotations__.items() 
-                if '__annotations__' in dir(self.cls) else {}.items()) 
+                self.cls.__dict__.items(), self.cls.__annotations__.items()
+                if '__annotations__' in dir(self.cls) else {}.items())
             if not key.startswith("_")
         }
 
@@ -187,14 +189,14 @@ class Object(Field):
         definition = {
             "type": "object",
 
-            #inserting the definiton of discriminator
+            # inserting the definiton of discriminator
             **self.getDiscriminatorDef(),
 
             "properties": self.properties,
             **super().serialize(),
         }
 
-        #getting all refs on parental classes
+        # getting all refs on parental classes
         refs = self.inheritanceRef()
 
         return {"allOf": refs+[definition]} if refs != [] else definition
