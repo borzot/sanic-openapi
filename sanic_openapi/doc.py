@@ -6,7 +6,7 @@ from itertools import chain
 
 
 class Field:
-    def __init__(self, description=None, required=None, name=None, choices=None):
+    def __init__(self, description=None, required=[], name=None, choices=None):
         self.name = name
         self.description = description
         self.required = required
@@ -18,7 +18,7 @@ class Field:
             output["name"] = self.name
         if self.description:
             output["description"] = self.description
-        if self.required is not None:
+        if self.required != []:
             output["required"] = self.required
         if self.choices is not None:
             output["enum"] = self.choices
@@ -131,17 +131,19 @@ class Object(Field):
         self.object_name = object_name or cls.__name__
 
         # getting properties of class
+        self.requiredList = []
         self.properties = self.getProperties()
 
         # getting the name of discriminator if exists
         self.discriminator = self.getDiscriminatorName()
 
         # adding discriminator field in 'required'
-        if self.discriminator:
-            if 'required' in kwargs:
-                kwargs['required'].append(self.discriminator)
-            else:
-                kwargs['required'] = [self.discriminator]
+        if self.discriminator and self.discriminator not in self.requiredList:
+            self.requiredList.append(self.discriminator)
+        if 'required' in kwargs:
+            kwargs['required'].extend(self.requiredList)
+        else:
+            kwargs['required'] = self.requiredList
 
         super().__init__(*args, **kwargs)
 
@@ -182,11 +184,20 @@ class Object(Field):
         return {'discriminator':
                 self.discriminator} if self.discriminator else {}
 
+    def getSerializedFields(self, key, schema):
+        serialized = serialize_schema(schema)
+        if 'required' not in serialized:
+            return serialized
+        if serialized['required'] == True:
+            self.requiredList.append(key)
+            serialized.pop('required')
+        return serialized
+
     def getProperties(self):
         """moved from definition method because
         of necessity in additional use"""
         return {
-            key: serialize_schema(schema)
+            key: self.getSerializedFields(key, schema)
             for key, schema in chain(
                 self.cls.__dict__.items(), self.cls.__annotations__.items()
                 if '__annotations__' in dir(self.cls) else {}.items())
