@@ -1,5 +1,4 @@
 import collections.abc
-import typing
 import uuid
 from collections import defaultdict
 from datetime import date, datetime
@@ -7,7 +6,7 @@ from itertools import chain
 
 
 class Field:
-    def __init__(self, description=None, required=None, name=None, choices=None):
+    def __init__(self, description=None, required=[], name=None, choices=None):
         self.name = name
         self.description = description
         self.required = required
@@ -19,7 +18,7 @@ class Field:
             output["name"] = self.name
         if self.description:
             output["description"] = self.description
-        if self.required is not None:
+        if self.required != []:
             output["required"] = self.required
         if self.choices is not None:
             output["enum"] = self.choices
@@ -39,6 +38,10 @@ class Float(Field):
 class String(Field):
     def serialize(self):
         return {"type": "string", **super().serialize()}
+
+
+class Discriminator(String):
+    pass
 
 
 class Boolean(Field):
@@ -124,28 +127,99 @@ definitions = {}
 
 class Object(Field):
     def __init__(self, cls, *args, object_name=None, **kwargs):
-        super().__init__(*args, **kwargs)
-
         self.cls = cls
         self.object_name = object_name or cls.__name__
+
+        # getting properties of class
+        self.requiredList = []
+        self.properties = self.getProperties()
+
+        # getting the name of discriminator if exists
+        self.discriminator = self.getDiscriminatorName()
+
+        # adding discriminator field in 'required'
+        if self.discriminator and self.discriminator not in self.requiredList:
+            self.requiredList.append(self.discriminator)
+        if 'required' in kwargs:
+            kwargs['required'].extend(self.requiredList)
+        else:
+            kwargs['required'] = self.requiredList
+
+        super().__init__(*args, **kwargs)
 
         register_as = object_name or "{}.{}".format(cls.__module__, cls.__qualname__)
         if register_as not in definitions:
             definitions[register_as] = (self, self.definition)
 
+        # creating definitions for all parental classes
+        for base in cls.__bases__:
+            if base.__name__ != "object":
+                Object(base)
+
+    def inheritanceRef(self):
+        """if class has any parents except 'object' class,
+        return dict with a key 'allOf' and a list with links
+         on parental classes definitions"""
+        refs = []
+        for base in self.cls.__bases__:
+            if base.__name__ != "object":
+                refs.append({'$ref': "#/definitions/{}".format(base.__name__)})
+        return refs
+
+    def getDiscriminatorName(self):
+        """returns discriminator field name if it is
+         in class and described in _meta"""
+        for var in self.cls.__dict__.items():
+            if var[1].__class__.__name__ == 'Discriminator':
+                return var[0]
+        if "_meta" not in self.cls.__dict__:
+            return None
+        if "discriminator" not in self.cls._meta.__dict__:
+            return None
+        if self.cls._meta.__dict__["discriminator"] in self.properties:
+            return self.cls._meta.__dict__["discriminator"]
+
+    def getDiscriminatorDef(self):
+        """if class has discriminator, returns dict with it definition"""
+        return {'discriminator':
+                self.discriminator} if self.discriminator else {}
+
+    def getSerializedFields(self, key, schema):
+        serialized = serialize_schema(schema)
+        if 'required' not in serialized:
+            return serialized
+        if serialized['required'] == True:
+            self.requiredList.append(key)
+            serialized.pop('required')
+        return serialized
+
+    def getProperties(self):
+        """moved from definition method because
+        of necessity in additional use"""
+        return {
+            key: self.getSerializedFields(key, schema)
+            for key, schema in chain(
+                self.cls.__dict__.items(), self.cls.__annotations__.items()
+                if '__annotations__' in dir(self.cls) else {}.items())
+            if not key.startswith("_")
+        }
+
     @property
     def definition(self):
-        return {
+        definition = {
             "type": "object",
-            "properties": {
-                key: serialize_schema(schema)
-                for key, schema in chain(
-                    self.cls.__dict__.items(), typing.get_type_hints(self.cls).items()
-                )
-                if not key.startswith("_")
-            },
+
+            # inserting the definiton of discriminator
+            **self.getDiscriminatorDef(),
+
+            "properties": self.properties,
             **super().serialize(),
         }
+
+        # getting all refs on parental classes
+        refs = self.inheritanceRef()
+
+        return {"allOf": refs+[definition]} if refs != [] else definition
 
     def serialize(self):
         return {

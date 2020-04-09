@@ -9,6 +9,3 @@ def app():
     app = Sanic("test")
     app.blueprint(sanic_openapi.swagger_blueprint)
     yield app
-
-    # Clean up
-    sanic_openapi.swagger.definitions = {}
